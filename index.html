@@ -99,7 +99,7 @@ footer { text-align: center; color: #555; font-size: .8rem; margin-top: 20px; }
   <section>
     <h2>Configuración del inventario</h2>
     <label for="marca">Marca</label>
-    <input id="marca" type="text" placeholder="Ingresá la marca">
+    <input id="marca" type="text" placeholder="Ej. Question">
     <label for="deposito">Depósito</label>
     <select id="deposito">
       <option value="">Seleccionar depósito…</option>
@@ -115,8 +115,8 @@ footer { text-align: center; color: #555; font-size: .8rem; margin-top: 20px; }
   <!-- 4. Importación y validación del catálogo maestro -->
   <section>
     <h2>Catálogo de productos</h2>
-    <p class="note">Cargá el Excel maestro que contiene las columnas «Código de Barras» y «Descripción del artículo». La columna «Código» es opcional. El catálogo queda guardado en este navegador.</p>
-    <label for="catalogFile">Seleccionar Excel maestro (.xlsx / .xls)</label>
+    <p class="note">Cargá el Excel maestro que contiene las columnas «Código, Código de Barras y Descripción del artículo»</p>
+    <label for="catalogFile">Seleccionar Excel maestro</label>
     <input id="catalogFile" type="file" accept=".xlsx,.xls">
     <p id="catalogStatus" class="status" role="status">Catálogo todavía no cargado.</p>
   </section>
