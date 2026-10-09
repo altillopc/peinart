@@ -29,11 +29,13 @@ main {
   padding: 18px 14px 36px;
 }
 header { text-align: center; margin-bottom: 18px; }
-.logo-text {
-  font-size: clamp(30px, 8vw, 48px);
-  font-weight: 800;
-  letter-spacing: 2px;
-  margin: 5px 0;
+.logo-peinart {
+  display: block;
+  width: min(100%, 300px);
+  max-height: 120px;
+  height: auto;
+  object-fit: contain;
+  margin: 5px auto;
 }
 .subtitle { margin: 0; color: #555; }
 section {
@@ -89,7 +91,7 @@ footer { text-align: center; color: #555; font-size: .8rem; margin-top: 20px; }
 <main>
   <!-- 2. Encabezado de la aplicación -->
   <header>
-    <div class="logo-text" aria-label="Peinart">PEINART</div>
+    <img class="logo-peinart" src="./img/Logo_Peinart.webp" alt="Logo Peinart">
     <p class="subtitle">Control de inventario · Versión 1.2</p>
   </header>
 
