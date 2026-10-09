@@ -1,3 +1,487 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>Control Inventario Peinart Appw 1.0</title><style>:root{--bg:#696969}*{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Arial,sans-serif;color:#111}.wrap{max-width:700px;margin:auto;padding:14px}.card{background:#fff;border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:0 4px 18px #0002}header{text-align:center}header img{max-width:220px;max-height:75px}h1{font-size:25px;margin:8px 0 2px}.v,.small{font-size:12px;color:#555}.hidden{display:none!important}label{display:block;font-weight:bold;margin:10px 0 6px}input,select,button{width:100%;font:inherit;border-radius:13px}input,select{padding:14px;border:1px solid #aaa}button{border:0;padding:16px;margin-top:10px;min-height:54px;font-weight:bold}.primary{background:#111;color:#fff}.secondary{background:#e9e9e9}.danger{background:#b00020;color:#fff}#reader{background:#111;border-radius:16px;overflow:hidden;min-height:130px}#reader video{width:100%!important}.status{text-align:center;font-weight:bold;margin:8px}.last{background:#f2f2f2;border-radius:14px;padding:14px;margin-top:12px;text-align:center}.code{font-size:13px;color:#666}.desc{font-size:20px;font-weight:bold;margin:4px}.qty{font-size:28px;font-weight:900}.summary{display:flex;gap:8px;margin-top:10px}.stat{flex:1;background:#f2f2f2;border-radius:12px;padding:10px;text-align:center}.stat b{display:block;font-size:22px}.tableWrap{overflow:auto;max-height:45vh}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:9px 6px;border-bottom:1px solid #ddd;text-align:left}th{background:#eee;position:sticky;top:0}.ok{color:#087f23;font-weight:bold}.warn{color:#a15c00;font-weight:bold}</style></head><body><div class="wrap"><div class="card"><header><img src="https://acdn-us.mitiendanube.com/stores/004/687/965/themes/common/logo-42425580-1724329812-465246c40093abbb4c007d02c890434d1724329813-480-0.webp"><h1>Control Inventario</h1><div class="v">Control_Inventario_Peinart_appw_1.0</div></header></div><div id="setup" class="card"><h2>Inicio del inventario</h2><label>Marca</label><input id="brand" placeholder="Ej.: Duga"><label>Depósito</label><select id="deposit"><option value="">Seleccionar depósito</option><option>Deposito 22</option><option>Santa Rosa</option><option>Colon</option><option>Cerro</option><option>CbaShopping</option><option>Nuevocentro</option></select><button class="primary" id="start">Comenzar inventario</button><p class="small">El catálogo queda guardado en este dispositivo y no hace falta cargarlo cada vez.</p><button class="secondary" id="load">Cargar / actualizar catálogo Excel</button><input id="file" type="file" accept=".xlsx,.xls" class="hidden"><div id="info" class="small"></div></div><div id="app" class="hidden"><div class="card"><h2>Escaneo continuo</h2><div id="status" class="status">Cámara lista para iniciar.</div><div id="reader"></div><button class="primary" id="cam">📷 Iniciar cámara</button><button class="secondary hidden" id="stop">Detener cámara</button><p class="small">La cámara permanece activa después de cada lectura para escanear el siguiente producto directamente.</p><div class="last"><div id="lc" class="code">Sin escaneo todavía</div><div id="ld" class="desc">—</div><div id="lq" class="qty">0 unidades</div></div><div class="summary"><div class="stat"><b id="pc">0</b>productos</div><div class="stat"><b id="uc">0</b>unidades</div></div></div><div class="card"><label>Carga manual de código</label><input id="manual" inputmode="numeric" placeholder="Código y Enter"><button class="secondary" id="add">Agregar código</button></div><div class="card"><h2>Productos escaneados</h2><div class="tableWrap"><table><thead><tr><th>Código</th><th>Código de Barras</th><th>Descripción</th><th>Cantidad</th></tr></thead><tbody id="rows"></tbody></table></div></div><div class="card"><button class="primary" id="finish">Finalizar y guardar inventario</button><button class="danger" id="new">Nuevo inventario</button></div></div></div><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script><script>
-const colors={'Deposito 22':'#696969','Santa Rosa':'#FF0000','Colon':'#6495ED','Cerro':'#FFFF00','CbaShopping':'#FF00FF','Nuevocentro':'#FF7F50'},K='peinart_catalog_v1';let catalog=[],counts=new Map(),scanner=null,running=false,last=0;const $=x=>document.getElementById(x),clean=x=>String(x??'').trim().replace(/^_+/,'');
-function esc(x){return String(x).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}function info(){$('info').innerHTML=catalog.length?'<span class="ok">Catálogo guardado: '+catalog.length+' productos.</span>':'<span class="warn">No hay catálogo guardado.</span>'}try{catalog=JSON.parse(localStorage.getItem(K)||'null')?.catalog||[]}catch{}info();$('deposit').onchange=()=>document.body.style.background=colors[$('deposit').value]||'#696969';$('load').onclick=()=>$('file').click();$('file').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{let w=XLSX.read(await f.arrayBuffer(),{type:'array'}),r=XLSX.utils.sheet_to_json(w.Sheets[w.SheetNames[0]],{header:1,defval:''}),h=r[0].map(String),ci=h.indexOf('Código'),bi=h.indexOf('Código de Barras'),di=h.indexOf('Descripción del artículo');if(bi<0||di<0)throw Error('Faltan las columnas requeridas.');catalog=r.slice(1).map(x=>({code:ci>=0?clean(x[ci]):'',barcode:clean(x[bi]),desc:clean(x[di])})).filter(x=>x.barcode);localStorage.setItem(K,JSON.stringify({catalog,savedAt:new Date().toISOString()}));info();alert('Catálogo cargado y guardado en este dispositivo.')}catch(x){alert(x.message)}e.target.value=''};$('start').onclick=()=>{if(!$('brand').value.trim())return alert('Ingresá la marca.');if(!$('deposit').value)return alert('Seleccioná el depósito.');if(!catalog.length)return alert('Primero cargá el Excel maestro.');counts=new Map();$('setup').classList.add('hidden');$('app').classList.remove('hidden');render()};function addScan(raw){let b=clean(raw);if(!b)return;let p=catalog.find(x=>x.barcode===b),o=counts.get(b)||{barcode:b,code:p?.code||'',desc:p?.desc||'Código no Encontrado',qty:0};o.qty++;counts.set(b,o);$('lc').textContent='Código: '+b;$('ld').textContent=o.desc;$('lq').textContent=o.qty+' unidades';render()}function render(){let a=[...counts.values()];$('pc').textContent=a.length;$('uc').textContent=a.reduce((s,x)=>s+x.qty,0);$('rows').innerHTML=a.length?a.map(x=>'<tr><td>'+esc(x.code)+'</td><td>'+esc(x.barcode)+'</td><td>'+esc(x.desc)+'</td><td><b>'+x.qty+'</b></td></tr>').join(''):'<tr><td colspan="4">Todavía no hay productos.</td></tr>'}$('add').onclick=()=>{addScan($('manual').value);$('manual').value='';$('manual').focus()};$('manual').onkeydown=e=>{if(e.key==='Enter')$('add').click()};async function startCam(){if(running)return;try{scanner=new Html5Qrcode('reader');await scanner.start({facingMode:'environment'},{fps:12,qrbox:{width:280,height:110}},d=>{let n=Date.now();if(n-last<900)return;last=n;addScan(d)},()=>{});running=true;$('status').textContent='Cámara activa — apuntá al próximo código.';$('cam').classList.add('hidden');$('stop').classList.remove('hidden')}catch(e){alert('No se pudo iniciar la cámara. Verificá el permiso y que la página use HTTPS.')}}async function stopCam(){if(scanner){try{await scanner.stop();await scanner.clear()}catch{}}scanner=null;running=false;$('status').textContent='Cámara detenida.';$('cam').classList.remove('hidden');$('stop').classList.add('hidden')}$('cam').onclick=startCam;$('stop').onclick=stopCam;$('finish').onclick=()=>{let a=[...counts.values()];if(!a.length)return alert('No hay productos escaneados.');let w=XLSX.utils.book_new(),d=[['Código','Código de Barras','Descripción del artículo','Cantidad'],...a.map(x=>[x.code,x.barcode,x.desc,x.qty])];XLSX.utils.book_append_sheet(w,XLSX.utils.aoa_to_sheet(d),'Inventario');let t=new Date(),dd=String(t.getDate()).padStart(2,'0'),mm=String(t.getMonth()+1).padStart(2,'0'),brand=$('brand').value.trim().replace(/[\\/:*?"<>|]/g,'_');XLSX.writeFile(w,`Inventario_${brand}_${$('deposit').value}_${dd}-${mm}-${t.getFullYear()}.xlsx`);window.open('https://wa.me/5493513161661','_blank')};$('new').onclick=async()=>{await stopCam();counts=new Map();$('app').classList.add('hidden');$('setup').classList.remove('hidden')};render();</script></body></html>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#ffffff">
+<title>Control Inventario Peinart 1.2</title>
+
+<!-- 1. Estilos: presentación vertical adaptable a celulares -->
+<style>
+:root {
+  --fondo: #ffffff;
+  --texto: #222222;
+  --borde: #d8d8d8;
+  --panel: #f7f7f7;
+  --principal: #222222;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: Arial, Helvetica, sans-serif;
+  transition: background-color .15s ease;
+}
+main {
+  width: min(100%, 720px);
+  margin: 0 auto;
+  padding: 18px 14px 36px;
+}
+header { text-align: center; margin-bottom: 18px; }
+.logo-text {
+  font-size: clamp(30px, 8vw, 48px);
+  font-weight: 800;
+  letter-spacing: 2px;
+  margin: 5px 0;
+}
+.subtitle { margin: 0; color: #555; }
+section {
+  background: rgba(255,255,255,.94);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: 15px;
+  margin: 13px 0;
+}
+h2 { font-size: 1.12rem; margin: 0 0 12px; }
+label { display: block; font-weight: 700; margin: 12px 0 6px; }
+input, select, button {
+  width: 100%;
+  min-height: 44px;
+  font-size: 1rem;
+  border-radius: 8px;
+}
+input, select { padding: 9px 10px; border: 1px solid #aaa; background: #fff; }
+button {
+  border: 0;
+  padding: 11px 14px;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--principal);
+  color: #fff;
+  margin-top: 10px;
+}
+button.secondary { background: #e8e8e8; color: #222; border: 1px solid #c7c7c7; }
+button.danger { background: #8e1c1c; }
+button:disabled { opacity: .55; cursor: not-allowed; }
+.note { color: #555; font-size: .9rem; line-height: 1.4; }
+.status { margin: 10px 0 0; font-weight: 700; overflow-wrap: anywhere; }
+.row { display: grid; grid-template-columns: 1fr; gap: 8px; }
+#reader { width: 100%; overflow: hidden; border-radius: 8px; }
+#reader video { object-fit: cover; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+th, td { border-bottom: 1px solid #ddd; padding: 8px 5px; text-align: left; overflow-wrap: anywhere; }
+th { background: #f0f0f0; }
+.table-wrap { max-height: 310px; overflow: auto; }
+.pill { display: inline-block; padding: 5px 9px; border-radius: 999px; background: #eee; font-size: .85rem; }
+footer { text-align: center; color: #555; font-size: .8rem; margin-top: 20px; }
+@media (min-width: 520px) {
+  main { padding: 24px 20px 42px; }
+  .row.two { grid-template-columns: 1fr 1fr; }
+}
+</style>
+
+<!-- Librerías externas: requieren conexión a Internet -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+<body>
+<main>
+  <!-- 2. Encabezado de la aplicación -->
+  <header>
+    <div class="logo-text" aria-label="Peinart">PEINART</div>
+    <p class="subtitle">Control de inventario · Versión 1.2</p>
+  </header>
+
+  <!-- 3. Selección de marca y depósito -->
+  <section>
+    <h2>Configuración del inventario</h2>
+    <label for="marca">Marca</label>
+    <input id="marca" type="text" placeholder="Ingresá la marca">
+    <label for="deposito">Depósito</label>
+    <select id="deposito">
+      <option value="">Seleccionar depósito…</option>
+      <option value="Deposito 22">Deposito 22</option>
+      <option value="Santa Rosa">Santa Rosa</option>
+      <option value="Colon">Colon</option>
+      <option value="Cerro">Cerro</option>
+      <option value="CbaShopping">CbaShopping</option>
+      <option value="Nuevocentro">Nuevocentro</option>
+    </select>
+  </section>
+
+  <!-- 4. Importación y validación del catálogo maestro -->
+  <section>
+    <h2>Catálogo de productos</h2>
+    <p class="note">Cargá el Excel maestro que contiene las columnas «Código de Barras» y «Descripción del artículo». La columna «Código» es opcional. El catálogo queda guardado en este navegador.</p>
+    <label for="catalogFile">Seleccionar Excel maestro (.xlsx / .xls)</label>
+    <input id="catalogFile" type="file" accept=".xlsx,.xls">
+    <p id="catalogStatus" class="status" role="status">Catálogo todavía no cargado.</p>
+  </section>
+
+  <!-- 5. Escaneo continuo: cámara trasera y pausa de 2 segundos -->
+  <section>
+    <h2>Escanear códigos de barras</h2>
+    <div class="row two">
+      <button id="startScan">Iniciar cámara</button>
+      <button id="stopScan" class="secondary" disabled>Detener cámara</button>
+    </div>
+    <div id="reader" style="margin-top:12px"></div>
+    <p class="note">Luego de registrar un código, se ignoran nuevas lecturas durante 2 segundos. La cámara permanece activa.</p>
+    <label for="manualCode">Carga manual de código</label>
+    <div class="row two">
+      <input id="manualCode" type="text" inputmode="numeric" placeholder="Código de barras">
+      <button id="addManual">Agregar código</button>
+    </div>
+    <p id="scanStatus" class="status" role="status">Cámara detenida.</p>
+  </section>
+
+  <!-- 6. Listado de productos y cantidades registrados -->
+  <section>
+    <h2>Productos escaneados <span class="pill" id="itemCount">0 códigos</span></h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Código de barras</th><th>Descripción</th><th>Cantidad</th></tr></thead>
+        <tbody id="scanRows"><tr><td colspan="3">Todavía no hay códigos registrados.</td></tr></tbody>
+      </table>
+    </div>
+    <button id="clearScans" class="secondary">Vaciar inventario actual</button>
+  </section>
+
+  <!-- 7. Finalización: Excel filtrado y apertura manual de WhatsApp -->
+  <section>
+    <h2>Finalizar inventario</h2>
+    <p class="note">Se exportarán únicamente los productos registrados. Al terminar, se abrirá WhatsApp para que puedas enviar el archivo manualmente.</p>
+    <button id="finish">Finalizar y guardar inventario</button>
+    <p id="finishStatus" class="status" role="status"></p>
+  </section>
+  <footer>Control de Inventario Peinart · 1.2</footer>
+</main>
+
+<script>
+/* =========================================================
+   8. Configuración y estado general
+   ========================================================= */
+const CATALOG_KEY = 'peinart_catalog_v1';
+const WHATSAPP_URL = 'https://wa.me/5493513161661';
+const DEPOSIT_COLORS = {
+  'Deposito 22': '#696969',
+  'Santa Rosa': '#FF0000',
+  'Colon': '#6495ED',
+  'Cerro': '#FFFF00',
+  'CbaShopping': '#FF00FF',
+  'Nuevocentro': '#FF7F50'
+};
+const REQUIRED_HEADERS = ['Código de Barras', 'Descripción del artículo'];
+let catalog = {};
+let scans = new Map();
+let scanner = null;
+let scannerRunning = false;
+let lastRegisteredAt = 0;
+const SCAN_PAUSE_MS = 2000;
+
+/* =========================================================
+   9. Utilidades: limpieza de códigos, nombre de archivo y UI
+   ========================================================= */
+function cleanBarcode(value) {
+  return String(value ?? '').trim().replace(/^_+/, '');
+}
+function safeFilePart(value) {
+  return String(value || '').trim()
+    .replace(/[\\/:*?"<>|]+/g, '-')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_') || 'SinDato';
+}
+function updateCatalogStatus(message) {
+  document.getElementById('catalogStatus').textContent = message;
+}
+function updateScanStatus(message) {
+  document.getElementById('scanStatus').textContent = message;
+}
+function updateFinishStatus(message) {
+  document.getElementById('finishStatus').textContent = message;
+}
+
+/* =========================================================
+   10. Almacenamiento local del catálogo
+   ========================================================= */
+function loadSavedCatalog() {
+  try {
+    const saved = localStorage.getItem(CATALOG_KEY);
+    if (saved) {
+      catalog = JSON.parse(saved) || {};
+      updateCatalogStatus(`Catálogo guardado disponible: ${Object.keys(catalog).length} códigos.`);
+    }
+  } catch (error) {
+    updateCatalogStatus('No se pudo leer el catálogo guardado. Volvé a cargar el Excel maestro.');
+  }
+}
+function saveCatalog() {
+  try {
+    localStorage.setItem(CATALOG_KEY, JSON.stringify(catalog));
+    return true;
+  } catch (error) {
+    updateCatalogStatus('No se pudo guardar el catálogo en este navegador. Revisá el espacio disponible.');
+    return false;
+  }
+}
+
+/* =========================================================
+   11. Importación Excel y validación de encabezados
+   ========================================================= */
+document.getElementById('catalogFile').addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  if (!window.XLSX) {
+    updateCatalogStatus('No se pudo cargar la librería Excel. Revisá la conexión a Internet y recargá la página.');
+    return;
+  }
+  try {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array', raw: true });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    const headers = (rows[0] || []).map(v => String(v).trim());
+    const barcodeIndex = headers.indexOf('Código de Barras');
+    const descriptionIndex = headers.indexOf('Descripción del artículo');
+    const missing = REQUIRED_HEADERS.filter(h => !headers.includes(h));
+
+    if (missing.length) {
+      updateCatalogStatus(
+        `Faltan columnas obligatorias: ${missing.join(', ')}. ` +
+        `Encabezados encontrados: ${headers.length ? headers.join(' | ') : '(ninguno)'}. ` +
+        'Corregí los títulos en la primera fila del Excel y volvé a cargarlo.'
+      );
+      return;
+    }
+
+    const nextCatalog = {};
+    for (const row of rows.slice(1)) {
+      const barcode = cleanBarcode(row[barcodeIndex]);
+      const description = String(row[descriptionIndex] ?? '').trim();
+      if (barcode) nextCatalog[barcode] = description || 'Sin descripción';
+    }
+    catalog = nextCatalog;
+    saveCatalog();
+    updateCatalogStatus(`Catálogo cargado: ${Object.keys(catalog).length} códigos. Guardado en este navegador.`);
+  } catch (error) {
+    updateCatalogStatus(`No se pudo leer el Excel: ${error.message || 'archivo inválido'}. Verificá el archivo y probá nuevamente.`);
+  } finally {
+    event.target.value = '';
+  }
+});
+
+/* =========================================================
+   12. Sonido breve al registrar un código
+   ========================================================= */
+function playBeep() {
+  // Web Audio genera el pitido sin necesitar un archivo de sonido externo.
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = new AudioContextClass();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.16, context.currentTime + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.16);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.17);
+    oscillator.onended = () => context.close().catch(() => {});
+  } catch (_) {
+    // Algunos navegadores requieren interacción previa para habilitar audio.
+  }
+}
+
+/* =========================================================
+   13. Registro de lectura y pausa global de 2 segundos
+   ========================================================= */
+function registerScan(rawCode, source = 'cámara') {
+  const now = Date.now();
+  if (now - lastRegisteredAt < SCAN_PAUSE_MS) {
+    return false; // Lectura ignorada: no suma cantidad ni emite sonido.
+  }
+  const barcode = cleanBarcode(rawCode);
+  if (!barcode) {
+    updateScanStatus('Ingresá o escaneá un código válido.');
+    return false;
+  }
+
+  // La pausa comienza en el instante en que se registra el código.
+  lastRegisteredAt = now;
+  const description = catalog[barcode] || 'Código no Encontrado';
+  const existing = scans.get(barcode);
+  if (existing) {
+    existing.quantity += 1;
+    existing.description = description;
+  } else {
+    scans.set(barcode, { barcode, description, quantity: 1 });
+  }
+  playBeep();
+  renderScans();
+  updateScanStatus(`${barcode} · ${description} · registrado desde ${source}.`);
+  return true;
+}
+
+/* =========================================================
+   14. Renderizado del inventario escaneado
+   ========================================================= */
+function renderScans() {
+  const tbody = document.getElementById('scanRows');
+  const entries = Array.from(scans.values());
+  document.getElementById('itemCount').textContent = `${entries.length} códigos`;
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="3">Todavía no hay códigos registrados.</td></tr>';
+    return;
+  }
+  tbody.replaceChildren();
+  for (const item of entries) {
+    const tr = document.createElement('tr');
+    for (const value of [item.barcode, item.description, item.quantity]) {
+      const td = document.createElement('td');
+      td.textContent = String(value);
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+}
+
+/* =========================================================
+   15. Selección de depósito y color de fondo
+   ========================================================= */
+document.getElementById('deposito').addEventListener('change', (event) => {
+  document.body.style.backgroundColor = DEPOSIT_COLORS[event.target.value] || '#ffffff';
+});
+
+/* =========================================================
+   16. Cámara trasera y escaneo continuo
+   ========================================================= */
+document.getElementById('startScan').addEventListener('click', async () => {
+  if (!window.Html5Qrcode) {
+    updateScanStatus('No se pudo cargar el lector de códigos. Revisá la conexión a Internet.');
+    return;
+  }
+  if (scannerRunning) return;
+  try {
+    scanner = scanner || new Html5Qrcode('reader');
+    const cameras = await Html5Qrcode.getCameras();
+    const backCamera = cameras.find(c => /back|rear|environment|trasera|posterior/i.test(c.label));
+    const cameraId = backCamera?.id || cameras[cameras.length - 1]?.id;
+    if (!cameraId) throw new Error('No se encontró una cámara disponible.');
+    await scanner.start(
+      cameraId,
+      { fps: 10, qrbox: (width, height) => {
+          const size = Math.floor(Math.min(width, height) * 0.72);
+          return { width: size, height: size };
+        } },
+      decodedText => registerScan(decodedText, 'cámara'),
+      () => {}
+    );
+    scannerRunning = true;
+    document.getElementById('startScan').disabled = true;
+    document.getElementById('stopScan').disabled = false;
+    updateScanStatus('Cámara activa. Apuntá al código de barras.');
+  } catch (error) {
+    updateScanStatus(`No se pudo iniciar la cámara: ${error.message || error}. Usá HTTPS y permití el acceso a la cámara.`);
+  }
+});
+document.getElementById('stopScan').addEventListener('click', async () => {
+  if (!scanner || !scannerRunning) return;
+  try {
+    await scanner.stop();
+    await scanner.clear();
+  } catch (_) {}
+  scannerRunning = false;
+  document.getElementById('startScan').disabled = false;
+  document.getElementById('stopScan').disabled = true;
+  updateScanStatus('Cámara detenida.');
+});
+
+/* =========================================================
+   17. Carga manual de códigos
+   ========================================================= */
+function addManualCode() {
+  const input = document.getElementById('manualCode');
+  if (registerScan(input.value, 'carga manual')) input.value = '';
+  input.focus();
+}
+document.getElementById('addManual').addEventListener('click', addManualCode);
+document.getElementById('manualCode').addEventListener('keydown', event => {
+  if (event.key === 'Enter') addManualCode();
+});
+
+/* =========================================================
+   18. Vaciar el inventario actual (sin borrar el catálogo)
+   ========================================================= */
+document.getElementById('clearScans').addEventListener('click', () => {
+  if (!scans.size || confirm('¿Querés vaciar los códigos registrados en este inventario?')) {
+    scans.clear();
+    renderScans();
+    updateScanStatus('Inventario actual vacío.');
+  }
+});
+
+/* =========================================================
+   19. Crear Excel con productos escaneados y formato acordado
+   ========================================================= */
+function exportInventory() {
+  if (!window.XLSX) throw new Error('No se pudo cargar la librería Excel. Revisá la conexión a Internet.');
+  const deposit = document.getElementById('deposito').value || 'SinDeposito';
+  const brand = document.getElementById('marca').value || 'SinMarca';
+  const date = new Date();
+  const stamp = [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0')
+  ].join('');
+  const baseName = `Inventario_${safeFilePart(deposit)}_${safeFilePart(brand)}_${stamp}`;
+  const rows = [
+    [baseName, 'Código de Barras', 'Descripción del artículo', 'Cantidad'],
+    ...Array.from(scans.values()).map(item => [
+      '', Number(item.barcode), item.description, item.quantity
+    ])
+  ];
+  const worksheet = XLSX.utils.aoa_to_sheet(rows);
+  // Columna B: formato numérico sin decimales para códigos EAN-13.
+  for (let row = 1; row < rows.length; row++) {
+    const cell = worksheet[XLSX.utils.encode_cell({ r: row, c: 1 })];
+    if (cell) { cell.t = 'n'; cell.z = '0'; }
+  }
+  worksheet['!cols'] = [
+    { wch: 36 }, { wch: 18 }, { wch: 42 }, { wch: 12 }
+  ];
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Inventario');
+  XLSX.writeFile(workbook, `${baseName}.xlsx`);
+  return baseName;
+}
+
+/* =========================================================
+   20. Finalizar: exportar y abrir WhatsApp para envío manual
+   ========================================================= */
+document.getElementById('finish').addEventListener('click', () => {
+  if (!scans.size) {
+    updateFinishStatus('No hay productos escaneados para exportar.');
+    return;
+  }
+  try {
+    const filename = exportInventory();
+    updateFinishStatus(`Excel generado: ${filename}.xlsx. Se abrirá WhatsApp para que adjuntes el archivo manualmente.`);
+    window.open(WHATSAPP_URL, '_blank', 'noopener');
+  } catch (error) {
+    updateFinishStatus(`No se pudo generar el Excel: ${error.message || error}`);
+  }
+});
+
+/* =========================================================
+   21. Inicio: recuperar el catálogo guardado
+   ========================================================= */
+loadSavedCatalog();
+renderScans();
+</script>
+</body>
+</html>
